@@ -12,9 +12,14 @@
 #include "mopeka.h"
 #include "task.h"
 
-#define HW_ID_LPG	3
-#define HW_ID_AIR	4
-#define HW_ID_H2O	5
+#define HW_ID_LPG	 3     // Pro Check LPG bottom-up
+#define HW_ID_P200	 4     // Pro-200 top-down
+#define HW_ID_H2O	 5     // Pro Check H2O bottom-up
+#define HW_ID_PPB    8     // PRO+ top-down Boosted BLE sensor
+#define HW_ID_PPC    9     // PRO+ top-down Cellular Sensor
+#define HW_ID_TDB  0x0A  // TD-40 Top-down Boosted BLE sensor
+#define HW_ID_TDC  0x0B  // TD-40 Top-down Cellular Sensor
+#define HW_ID_UNIV   0x0C  // Pro Check Universal Sensor
 
 static struct VeSettingProperties capacity_props = {
 	.type			= VE_FLOAT,
@@ -86,9 +91,9 @@ static int mopeka_init(struct VeItem *root, void *data)
 	ble_dbus_set_item(root, "Remaining",
 			  veVariantInvalidType(&v, VE_FLOAT), &veUnitm3);
 
-	if (hwid == HW_ID_LPG) {
+	if (hwid != HW_ID_H2O) {
 		ble_dbus_add_settings(root, mopeka_lpg_settings,
-				      array_size(mopeka_lpg_settings));
+					  array_size(mopeka_lpg_settings));
 	}
 
 	return 0;
@@ -116,6 +121,10 @@ static const float mopeka_coefs_butane[] = {
 	0.03615, 0.000815,
 };
 
+static const float mopeka_coefs_air[] = {
+	0.573045, -0.002822, -0.00000535,
+};
+
 static float mopeka_scale_butane(struct VeItem *root, int temp)
 {
 	float r = veItemValueInt(root, "ButaneRatio") / 100.0;
@@ -130,6 +139,7 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 	float level;
 	int hwid;
 	int temp;
+	int fluid_type;
 
 	hwid = veItemValueInt(root, "HardwareID");
 	temp = veItemValueInt(root, "Temperature");
@@ -140,8 +150,17 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 		scale = mopeka_scale_butane(root, temp);
 		coefs = mopeka_coefs_lpg;
 		break;
-	case HW_ID_H2O:
-		coefs = mopeka_coefs_h2o;
+	case HW_ID_PU  :
+		scale = mopeka_scale_butane(root, temp);
+		coefs = mopeka_coefs_air;
+		break;
+	case HW_ID_P200:
+	case HW_ID_PPB:
+	case HW_ID_PPC:
+	case HW_ID_TDB:
+	case HW_ID_TDC:
+		// printf("Using AIR coefficients for level calculation\n");
+		coefs = mopeka_coefs_air;
 		break;
 	default:
 		return -1;
@@ -276,8 +295,8 @@ int mopeka_handle_mfg(const bdaddr_t *addr, const uint8_t *buf, int len)
 		return -1;
 
 	if (uid[0] != addr->b[2] ||
-	    uid[1] != addr->b[1] ||
-	    uid[2] != addr->b[0])
+		uid[1] != addr->b[1] ||
+		uid[2] != addr->b[0])
 		return -1;
 
 	hwid = buf[0];
@@ -288,6 +307,24 @@ int mopeka_handle_mfg(const bdaddr_t *addr, const uint8_t *buf, int len)
 		break;
 	case HW_ID_H2O:
 		type = "H2O";
+		break;
+	case HW_ID_P200:
+		type = "Pro200";
+		break;
+	case HW_ID_PPB:
+		type = "PPB";
+		break;
+	case HW_ID_PPC:
+		type = "PPC";
+		break;
+	case HW_ID_TDB:
+		type = "TDB";
+		break;
+	case HW_ID_TDC:
+		type = "TDC";
+		break;
+	case HW_ID_UNIV  :
+		type = "Univ";
 		break;
 	default:
 		return -1;
