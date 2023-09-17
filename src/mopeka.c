@@ -21,6 +21,18 @@
 #define HW_ID_TDC  0x0B  // TD-40 Top-down Cellular Sensor
 #define HW_ID_UNIV   0x0C  // Pro Check Universal Sensor
 
+#define FLUID_TYPE_FRESH_WATER   1
+#define FLUID_TYPE_WASTE_WATER   2
+#define FLUID_TYPE_LIVE_WELL     3
+#define FLUID_TYPE_OIL           4
+#define FLUID_TYPE_BLACK_WATER   5
+#define FLUID_TYPE_GASOLINE      6
+#define FLUID_TYPE_DIESEL        7
+#define FLUID_TYPE_LPG           8
+#define FLUID_TYPE_LNG           9
+#define FLUID_TYPE_HYDRAULIC_OIL 10
+#define FLUID_TYPE_RAW_WATER     11
+
 static struct VeSettingProperties capacity_props = {
 	.type			= VE_FLOAT,
 	.def.value.Float	= 0.2,
@@ -122,7 +134,7 @@ static const float mopeka_coefs_butane[] = {
 };
 
 static const float mopeka_coefs_air[] = {
-	0.573045, -0.002822, -0.00000535,
+	0.153096, 0.000327, -0.000000294,
 };
 
 static float mopeka_scale_butane(struct VeItem *root, int temp)
@@ -142,6 +154,7 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 	int fluid_type;
 	int tank_level_ext;
 
+	fluid_type = veItemValueInt(root, "FluidType");
 	hwid = veItemValueInt(root, "HardwareID");
 	temp = veItemValueInt(root, "Temperature");
 	temp += 40;
@@ -154,9 +167,33 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 		scale = mopeka_scale_butane(root, temp);
 		coefs = mopeka_coefs_lpg;
 		break;
-	case HW_ID_PU  :
-		scale = mopeka_scale_butane(root, temp);
-		coefs = mopeka_coefs_air;
+	case HW_ID_H2O:
+		coefs = mopeka_coefs_h2o;
+		break;
+	case HW_ID_UNIV:
+		switch (fluid_type) {
+		case FLUID_TYPE_FRESH_WATER:
+		case FLUID_TYPE_WASTE_WATER:
+		case FLUID_TYPE_LIVE_WELL:
+		case FLUID_TYPE_BLACK_WATER:
+		case FLUID_TYPE_RAW_WATER:
+			// printf("Using H2O coefficients for level calculation\n");
+			coefs = mopeka_coefs_h2o;
+			break;
+		case FLUID_TYPE_LPG:
+			// printf("Using LPG coefficients for level calculation\n");
+			scale = mopeka_scale_butane(root, temp);
+			coefs =  mopeka_coefs_lpg;
+			break;
+		case FLUID_TYPE_OIL:
+		case FLUID_TYPE_GASOLINE:
+		case FLUID_TYPE_DIESEL:
+		case FLUID_TYPE_LNG:
+		case FLUID_TYPE_HYDRAULIC_OIL:
+		default:
+			// printf("No coefficients for fluid type\n");
+			return -1;
+		}
 		break;
 	case HW_ID_P200:
 	case HW_ID_PPB:
