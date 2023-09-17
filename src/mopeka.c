@@ -290,6 +290,7 @@ static const struct reg_info mopeka_adv[] = {
 static void mopeka_update_level(struct VeItem *root)
 {
 	struct VeItem *item;
+	int hwid;
 	float capacity;
 	int height;
 	int empty;
@@ -298,6 +299,7 @@ static void mopeka_update_level(struct VeItem *root)
 	float remain;
 	VeVariant v;
 
+	hwid = veItemValueInt(root, "HardwareID");
 	item = veItemByUid(root, "Capacity");
 	if (!item)
 		return;
@@ -310,14 +312,25 @@ static void mopeka_update_level(struct VeItem *root)
 	empty = veItemValueInt(root, "RawValueEmpty");
 	full = veItemValueInt(root, "RawValueFull");
 
-	if (empty >= full) {
-		veItemInvalidate(veItemByUid(root, "Level"));
-		veItemInvalidate(veItemByUid(root, "Remaining"));
-		ble_dbus_set_int(root, "Status", 4);
-		return;
-	}
+	if (hwid == HW_ID_PPB || hwid == HW_ID_PPC || hwid == HW_ID_TDB || hwid == HW_ID_TDC || hwid == HW_ID_P200) {
+		if (empty < full) {
+			veItemInvalidate(veItemByUid(root, "Level"));
+			veItemInvalidate(veItemByUid(root, "Remaining"));
+			ble_dbus_set_int(root, "Status", 4);
+			return;
+		}
 
-	level = (float)(height - empty) / (full - empty);
+		level = (float)(empty - full - height) / (empty - full);
+	} else {
+		if (empty >= full) {
+			veItemInvalidate(veItemByUid(root, "Level"));
+			veItemInvalidate(veItemByUid(root, "Remaining"));
+			ble_dbus_set_int(root, "Status", 4);
+			return;
+		}
+
+		level = (float)(height - empty) / (full - empty);
+	}
 
 	if (level < 0)
 		level = 0;
