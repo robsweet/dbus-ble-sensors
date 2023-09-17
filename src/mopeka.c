@@ -140,10 +140,14 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 	int hwid;
 	int temp;
 	int fluid_type;
+	int tank_level_ext;
 
 	hwid = veItemValueInt(root, "HardwareID");
 	temp = veItemValueInt(root, "Temperature");
 	temp += 40;
+
+	tank_level_ext = veItemValueInt(root, "TankLevelExtension");
+	rv += tank_level_ext << 14;
 
 	switch (hwid) {
 	case HW_ID_LPG:
@@ -177,8 +181,17 @@ static const struct reg_info mopeka_adv[] = {
 	{
 		.type	= VE_UN8,
 		.offset	= 0,
+		.mask   = 0x7f,
 		.name	= "HardwareID",
 		.format	= &veUnitNone,
+	},
+	{
+		.type	= VE_UN8,
+		.offset	= 0,
+		.shift	= 7,
+		.mask   = 1,
+		.name	= "TankLevelExtension",
+		.format = &veUnitNone,
 	},
 	{
 		.type	= VE_UN8,
