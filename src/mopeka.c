@@ -12,14 +12,14 @@
 #include "mopeka.h"
 #include "task.h"
 
-#define HW_ID_LPG	 3     // Pro Check LPG bottom-up
-#define HW_ID_P200	 4     // Pro-200 top-down
-#define HW_ID_H2O	 5     // Pro Check H2O bottom-up
-#define HW_ID_PPB    8     // PRO+ top-down Boosted BLE sensor
-#define HW_ID_PPC    9     // PRO+ top-down Cellular Sensor
-#define HW_ID_TDB  0x0A  // TD-40 Top-down Boosted BLE sensor
-#define HW_ID_TDC  0x0B  // TD-40 Top-down Cellular Sensor
-#define HW_ID_UNIV   0x0C  // Pro Check Universal Sensor
+#define HW_ID_PRO                3     // Pro Check LPG bottom-up
+#define HW_ID_PRO_200            4     // Pro-200, top-down
+#define HW_ID_PRO_H2O            5     // Pro Check H2O, bottom-up
+#define HW_ID_PRO_PLUS_BLE       8     // PRO+ bottom-up, Boosted BLE sensor
+#define HW_ID_PRO_PLUS_CELL      9     // PRO+ bottom-up, Bluetooth + Cellular Sensor
+#define HW_ID_TOPDOWN_BLE        10    // TD-40 or TD-200, Top-down, Boosted BLE sensor
+#define HW_ID_TOPDOWN_CELL       11    // TD-40 or TD-200, Top-down, Bluetooth + Cellular Sensor
+#define HW_ID_UNIVERSAL          12    // Pro Check Universal Sensor, bottom-up
 
 #define FLUID_TYPE_FRESH_WATER   1
 #define FLUID_TYPE_WASTE_WATER   2
@@ -103,7 +103,8 @@ static int mopeka_init(struct VeItem *root, void *data)
 	ble_dbus_set_item(root, "Remaining",
 			  veVariantInvalidType(&v, VE_FLOAT), &veUnitm3);
 
-	if (hwid != HW_ID_H2O) {
+	// Add butane slider only for bottom up sensors that might support propane/butane
+	if (hwid != HW_ID_PRO_H2O && hwid != HW_ID_TOPDOWN_BLE && hwid != HW_ID_TOPDOWN_CELL && hwid != HW_ID_PRO_200) {
 		ble_dbus_add_settings(root, mopeka_lpg_settings,
 					  array_size(mopeka_lpg_settings));
 	}
@@ -127,6 +128,10 @@ static const float mopeka_coefs_h2o[] = {
 
 static const float mopeka_coefs_lpg[] = {
 	0.573045, -0.002822, -0.00000535,
+};
+
+static const float mopeka_coefs_gasoline[] = {
+	0.7373417462, -0.001978229885, 0.00000202162,
 };
 
 static const float mopeka_coefs_butane[] = {
@@ -159,18 +164,28 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 	temp = veItemValueInt(root, "Temperature");
 	temp += 40;
 
+	// Check for presence of extension bit on certain hardware/firmware -
+	// it will always be 0 on old firmware/hardware where raw value saturates
+	// at 16383.  When extension bit is set, the raw_value resolution changes
+	// to 4us with 16384us offet.  Thus legacy sensors and firmware still 
+	// have 0 to 16383us range with 1us, and new versions add the range 16384us 
+	// to 81916us with 4us resolution
 	tank_level_ext = veItemValueInt(root, "TankLevelExtension");
-	rv += tank_level_ext << 14;
+	if (tank_level_ext) {
+		rv = 16384 + rv * 4;
+	}
 
 	switch (hwid) {
-	case HW_ID_LPG:
+	case HW_ID_PRO:
 		scale = mopeka_scale_butane(root, temp);
 		coefs = mopeka_coefs_lpg;
 		break;
-	case HW_ID_H2O:
+	case HW_ID_PRO_H2O:
 		coefs = mopeka_coefs_h2o;
 		break;
-	case HW_ID_UNIV:
+	case HW_ID_PRO_PLUS_BLE:
+	case HW_ID_PRO_PLUS_CELL:
+	case HW_ID_UNIVERSAL:
 		switch (fluid_type) {
 		case FLUID_TYPE_FRESH_WATER:
 		case FLUID_TYPE_WASTE_WATER:
@@ -183,23 +198,23 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 		case FLUID_TYPE_LPG:
 			// printf("Using LPG coefficients for level calculation\n");
 			scale = mopeka_scale_butane(root, temp);
-			coefs =  mopeka_coefs_lpg;
+			coefs = mopeka_coefs_lpg;
 			break;
-		case FLUID_TYPE_OIL:
 		case FLUID_TYPE_GASOLINE:
 		case FLUID_TYPE_DIESEL:
+			coefs = mopeka_coefs_gasoline;
+			break;
 		case FLUID_TYPE_LNG:
+		case FLUID_TYPE_OIL:
 		case FLUID_TYPE_HYDRAULIC_OIL:
 		default:
 			// printf("No coefficients for fluid type\n");
 			return -1;
 		}
 		break;
-	case HW_ID_P200:
-	case HW_ID_PPB:
-	case HW_ID_PPC:
-	case HW_ID_TDB:
-	case HW_ID_TDC:
+	case HW_ID_PRO_200:
+	case HW_ID_TOPDOWN_BLE:
+	case HW_ID_TOPDOWN_CELL:
 		// printf("Using AIR coefficients for level calculation\n");
 		coefs = mopeka_coefs_air;
 		break;
@@ -312,7 +327,7 @@ static void mopeka_update_level(struct VeItem *root)
 	empty = veItemValueInt(root, "RawValueEmpty");
 	full = veItemValueInt(root, "RawValueFull");
 
-	if (hwid == HW_ID_PPB || hwid == HW_ID_PPC || hwid == HW_ID_TDB || hwid == HW_ID_TDC || hwid == HW_ID_P200) {
+	if (hwid == HW_ID_TOPDOWN_BLE || hwid == HW_ID_TOPDOWN_CELL || hwid == HW_ID_PRO_200) {
 		if (empty < full) {
 			veItemInvalidate(veItemByUid(root, "Level"));
 			veItemInvalidate(veItemByUid(root, "Remaining"));
@@ -365,29 +380,29 @@ int mopeka_handle_mfg(const bdaddr_t *addr, const uint8_t *buf, int len)
 	hwid = buf[0];
 
 	switch (hwid) {
-	case HW_ID_LPG:
-		type = "LPG";
+	case HW_ID_PRO:
+		type = "Pro";
 		break;
-	case HW_ID_H2O:
-		type = "H2O";
+	case HW_ID_PRO_H2O:
+		type = "Pro H2O";
 		break;
-	case HW_ID_P200:
-		type = "Pro200";
+	case HW_ID_PRO_200:
+		type = "Pro 200";
 		break;
-	case HW_ID_PPB:
-		type = "PPB";
+	case HW_ID_PRO_PLUS_BLE:
+		type = "Pro+ BLE";
 		break;
-	case HW_ID_PPC:
-		type = "PPC";
+	case HW_ID_PRO_PLUS_CELL:
+		type = "Pro+ Cell";
 		break;
-	case HW_ID_TDB:
-		type = "TDB";
+	case HW_ID_TOPDOWN_BLE:
+		type = "Topdown BLE";
 		break;
-	case HW_ID_TDC:
-		type = "TDC";
+	case HW_ID_TOPDOWN_CELL:
+		type = "Topdown Cell";
 		break;
-	case HW_ID_UNIV  :
-		type = "Univ";
+	case HW_ID_UNIVERSAL  :
+		type = "Universal";
 		break;
 	default:
 		return -1;
