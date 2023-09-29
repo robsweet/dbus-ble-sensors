@@ -192,11 +192,9 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 		case FLUID_TYPE_LIVE_WELL:
 		case FLUID_TYPE_BLACK_WATER:
 		case FLUID_TYPE_RAW_WATER:
-			// printf("Using H2O coefficients for level calculation\n");
 			coefs = mopeka_coefs_h2o;
 			break;
 		case FLUID_TYPE_LPG:
-			// printf("Using LPG coefficients for level calculation\n");
 			scale = mopeka_scale_butane(root, temp);
 			coefs = mopeka_coefs_lpg;
 			break;
@@ -208,14 +206,12 @@ static int mopeka_xlate_level(struct VeItem *root, VeVariant *val, uint64_t rv)
 		case FLUID_TYPE_OIL:
 		case FLUID_TYPE_HYDRAULIC_OIL:
 		default:
-			// printf("No coefficients for fluid type\n");
 			return -1;
 		}
 		break;
 	case HW_ID_PRO_200:
 	case HW_ID_TOPDOWN_BLE:
 	case HW_ID_TOPDOWN_CELL:
-		// printf("Using AIR coefficients for level calculation\n");
 		coefs = mopeka_coefs_air;
 		break;
 	default:
