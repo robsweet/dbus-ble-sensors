@@ -381,28 +381,28 @@ int mopeka_handle_mfg(const bdaddr_t *addr, const uint8_t *buf, int len)
 
 	switch (hwid) {
 	case HW_ID_PRO:
-		type = "Pro";
+		type = "LPG";
 		break;
 	case HW_ID_PRO_H2O:
-		type = "Pro H2O";
+		type = "H2O";
 		break;
 	case HW_ID_PRO_200:
-		type = "Pro 200";
+		type = "Pro200";
 		break;
 	case HW_ID_PRO_PLUS_BLE:
-		type = "Pro+ BLE";
+		type = "PPB";
 		break;
 	case HW_ID_PRO_PLUS_CELL:
-		type = "Pro+ Cell";
+		type = "PPC";
 		break;
 	case HW_ID_TOPDOWN_BLE:
-		type = "Topdown BLE";
+		type = "TDB";
 		break;
 	case HW_ID_TOPDOWN_CELL:
-		type = "Topdown Cell";
+		type = "TDC";
 		break;
 	case HW_ID_UNIVERSAL  :
-		type = "Universal";
+		type = "Univ";
 		break;
 	default:
 		return -1;
